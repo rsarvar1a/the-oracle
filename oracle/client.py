@@ -107,7 +107,7 @@ class Client (discord.Client):
         """
         Administrator-gated permission to hard reload the command library for rapid testing.
         """
-        
+                
         self.logger.warn("Reloading the command library while live!")
         self.create_command_library()
                     
