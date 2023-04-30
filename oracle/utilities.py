@@ -27,7 +27,7 @@ def get_default (*items):
     """
     
     if len(items) == 1:
-        item = items.get(item, None)
+        item = items[0]
         
         def g(obj):
             return obj.get(item, None)

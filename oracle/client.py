@@ -110,100 +110,6 @@ class Client (discord.Client):
         
         self.logger.warn("Reloading the command library while live!")
         self.create_command_library()
-    
-   
-    def cmd_check_location (self, msg, policy):
-        """
-        Checks a location configuration to see if it satisfied.
-        """
-        
-        location_type, operator, location = utilities.get_default('scope', 'cmp', 'name')(policy)
-        
-        location_type = {
-            "category": "channel.category",
-             "channel": "channel",
-              "server": "channel.guild"
-        }[location_type.lower()]
-        actual_scope = utilities.rgetattr(msg, location_type).name
-        
-        match operator:
-            case "equals" | "exact" | "is":
-                return location == actual_scope
-            case "expr" | "like" | "regex":
-                try:
-                    return re.match(location, actual_scope) is not None
-                except Exception:
-                    self.logger.error("Invalid regex {}.".format(location))
-                    return False
-                
-   
-    def cmd_check_locations (self, msg, policy):
-        """
-        Determines whether the command is being invoked from a valid location or not.
-        """
-        
-        # The absence of a policy is the same as a full policy.
-        if not policy:
-            return True
-        
-        allow, deny = utilities.get_default('allow', 'deny')(policy)
-        
-        has_allow = True if not allow else any(self.cmd_check_location(msg, location) for location in allow)
-        has_deny  = False if not deny else any(self.cmd_check_location(msg, location) for location in deny)
-        
-        return has_allow and not has_deny
-   
-   
-    def cmd_check_requirements (self, msg, policy):
-        """
-        Determines from the command configuration if the command can be used in its current context.
-        """
-        
-        # The absence of a policy is the same as a full policy.
-        if not policy:
-            return True
-
-        locations, roles = utilities.get_default('locations', 'roles')(policy)
-
-        check_locations   = self.cmd_check_locations(msg, locations)
-        check_roles       = self.cmd_check_roles(msg, roles)
-        
-        return check_locations and check_roles
-        
-    
-    def cmd_check_role (self, msg, policy):
-        """
-        Determines whether the given role is satisfied.
-        """
-        
-        operator, name = utilities.get_default('cmp', 'name')(policy)
-        
-        match operator:
-            case "equals" | "exact" | "is":
-                return any(r.name == name for r in msg.author.roles)
-            case "expr" | "like" | "regex":
-                try:
-                    return any(re.match(name, r.name) is not None for r in msg.author.roles)
-                except Exception:
-                    self.logger.error("Invalid regex {}.".format(name))
-                    return False
-                
-    
-    def cmd_check_roles (self, msg, roles):
-        """
-        Ensures the member has the necessary roles to perform the given action.
-        """
-        
-        # The absence of a policy is the same as a full policy.
-        if not roles:
-            return True 
-        
-        allow, deny = utilities.get_default('allow', 'deny')(roles)
-
-        has_allow = True if not allow else any(self.cmd_check_role(msg, role) for role in allow)
-        has_deny  = False if not deny else any(self.cmd_check_role(msg, role) for role in deny)
-        
-        return has_allow and not has_deny
                     
     
     async def cmd_execute_actions (self, msg, actions):
@@ -221,6 +127,142 @@ class Client (discord.Client):
             function_name = await self.cmd_translate_action_key(action_key)
             await getattr(self, function_name, "action__no_such_action")(action_key, msg, args)
     
+    
+    async def cmd_find_correct (self, msg, cmd, candidates):
+        """
+        Given a list of candidates for this command, find the correct one if it exists.
+        """
+        
+        valid_candidates = [candidate for candidate in candidates if self.cmd_resolve_context(msg, candidate)]
+        
+        if len(valid_candidates) == 0:
+            return None
+        elif len(valid_candidates) == 1:
+            return valid_candidates[0]
+        else:
+            self.logger.error("Ambiguous command {} in context {}.".format(cmd, msg.id))
+            await msg.send(content = ":x: Something went wrong... let a staff member know!")
+            return None
+    
+    
+    def cmd_resolve_block_location (self, context, resolve):
+        """
+        Resolves a location.
+        """
+        
+        scope, cmp, name = utilities.get_default('scope', 'cmp', 'name')(resolve)
+        
+        location_type = {
+            "category": "channel.category",
+             "channel": "channel",
+              "server": "channel.guild"
+        }.get(scope.lower(), None)
+        
+        if not location_type:
+            self.logger.error("Unknown scope {}.".format(scope))
+            return False
+        
+        actual_scope = utilities.rgetattr(context, location_type).name
+        
+        match cmp:
+            case "equals" | "exact" | "is":
+                return name == actual_scope
+            case "expr" | "like" | "regex":
+                try:
+                    return re.match(name, actual_scope) is not None
+                except Exception:
+                    self.logger.error("Invalid regex {}.".format(name))
+                    return False
+        
+        self.logger.error("Unknown comparator {}.".format(cmp))
+        return False
+        
+        
+    def cmd_resolve_block_role (self, context, resolve):
+        """
+        Resolves a role.
+        """    
+        
+        operator, name = utilities.get_default('cmp', 'name')(resolve)
+        
+        match operator:
+            case "equals" | "exact" | "is":
+                return any(r.name == name for r in context.author.roles)
+            case "expr" | "like" | "regex":
+                try:
+                    return any(re.match(name, r.name) is not None for r in context.author.roles)
+                except Exception:
+                    self.logger.error("Invalid regex {}.".format(name))
+                    return False
+
+        self.logger.error("Unknown comparator {}.".format(operator))
+        return False
+        
+    
+    def cmd_resolve_recursive (self, context, resolve, operator = None):
+        """
+        If the resolve scope is a list, true if any(). If the resolve scope is a dict, true if all().
+        """
+
+        if isinstance(resolve, list):
+            match operator:
+                case 'and':
+                    return all(self.cmd_resolve_recursive(context, r) for r in resolve)
+                case 'or': 
+                    return any(self.cmd_resolve_recursive(context, r) for r in resolve)
+                case 'not':
+                    return not any(self.cmd_resolve_recursive(context, r) for r in resolve)
+                case _:
+                    self.logger.error("Unknown list operator {}.".format(operator))
+                    return False 
+        
+        # Is this a leaf or a node?
+        _and, _or, _not = utilities.get_default('and', 'or', 'not')(resolve)
+        results = [r for r in [_and, _or, _not] if r]
+        
+        if len(results) == 1:
+            if _and:
+                return self.cmd_resolve_recursive(context, resolve['and'], 'and')
+            if _or:
+                return self.cmd_resolve_recursive(context, resolve['or'], 'or')
+            if _not:
+                return self.cmd_resolve_recursive(context, resolve['not'], 'not')
+        elif len(results) > 1:
+            self.logger.error("Ambiguous resolver block: too many operators!")
+            return False 
+        
+        # Otherwise, there is no operator in this dict and thus it's a leaf.
+        handler = utilities.get_default('type')(resolve)
+        match handler:
+            case 'location':
+                return self.cmd_resolve_block_location(context, resolve)
+            case 'role':
+                return self.cmd_resolve_block_role(context, resolve)
+            case _:
+                self.logger.error("Unknown resolver leaf type {}.".format(handler))
+                return False
+        
+    
+    def cmd_resolve_context (self, context, candidate):
+        """
+        Resolves a context against a candidate.
+        """
+        
+        resolve = utilities.get_default('resolve')(candidate)
+        
+        # The absence of a policy is the same as full policy.
+        if not resolve:
+            return True 
+        
+        if not isinstance(resolve, dict):
+            self.logger.error("Top level resolver must be a dictionary.")
+            return False
+        
+        if 'and' not in resolve and 'or' not in resolve and 'not' in resolve:
+            self.logger.error("Top level resolver must be 'and', 'or' or 'not'.")
+        
+        return self.cmd_resolve_recursive(context, resolve)
+        
     
     async def cmd_send_response (self, msg, response):
         """
@@ -292,7 +334,7 @@ class Client (discord.Client):
         Using the command path, creates the custom commands from the JSON specifications.
         """
         
-        self.commands = {}
+        self.command_lists = {}
         collision = False
         
         s = time.perf_counter()
@@ -301,23 +343,38 @@ class Client (discord.Client):
         for path in pathlib.Path(self.command_path).rglob("cmd-*.json"):
             with open(path, "r") as f:
                 cmd_configs = json.load(f)
+                
                 if isinstance(cmd_configs, dict):
                     cmd_configs = [cmd_configs]
+                    
                 for config in cmd_configs:  
                     for alias in config['aliases']:
                         alias = alias.lower()
-                        if alias not in self.commands:
-                            self.commands.update({alias: config})
-                            self.logger.debug("Built command: `{}{}`".format(self.prefix, alias))
+                        
+                        if alias not in self.command_lists:
+                            self.command_lists.update({alias: [config]})
+                            self.logger.debug("Built new command: `{}{}`".format(self.prefix, alias))
                         else:
-                            self.logger.error("Name collision at {prefix}{alias}!.".format(**{ "prefix": self.prefix, "alias": alias }))
-                            collision = True
+                            if not any(
+                                existing_command.get("resolve", None) == config.get("resolve", None) 
+                                for existing_command in self.command_lists['alias']
+                            ):
+                                self.command_lists[alias].append(config)
+                                self.logger.debug("Name collision at {prefix}{alias}.".format(
+                                    **{ "prefix": self.prefix, "alias": alias }
+                                ))
+                            else:
+                                collision = True
+                                self.logger.error("True name and config collision at {prefix}{alias}!.".format(
+                                    **{ "prefix": self.prefix, "alias": alias }
+                                ))
         f = time.perf_counter()
 
         if collision:
-            self.logger.fatal("Resolve the above command name collisions.")
-            exit(1)
+            self.logger.fatal("Resolve naming collisions; overlapping commands might result in undefined behaviour.")
         else:
+            for k, v in self.command_lists.items():
+                self.logger.debug("Loaded command {}. ({} resolver entr{})".format(k, len(v), 'y' if len(v) == 1 else 'ies'))
             self.logger.info("Loaded commands successfully! (took {0:2f}s)".format(f - s))
         
     
@@ -338,19 +395,21 @@ class Client (discord.Client):
         # Get the command line formed from this command, after removing the prefix.
         cmd_array = message.content.lower().removeprefix(self.prefix).split()
         cmd, args = cmd_array[0], cmd_array[1:]
+        
         self.logger.debug("Received attempt at a command: `{} <{}>`".format(cmd, args))
         
-        if cmd not in self.commands:
+        if cmd not in self.command_lists:
             return
         
-        requirements, response, actions = utilities.get_default("requirements", "response", "actions")(self.commands[cmd])
+        self.logger.debug("Command {} is a command; trying to resolve.".format(cmd))
         
-        if not self.cmd_check_requirements(message, requirements):
-            self.logger.warn("Failed requirements check on `{pref}{cmd} <{args}>` by {name} (message id {id}).".format(
-                name = message.author.name + "#" + message.author.discriminator,
-                pref = self.prefix, cmd = cmd, args = args, id = message.id
-            ))
-            return 
+        exec_config = await self.cmd_find_correct(message, cmd, self.command_lists[cmd])
+        if not exec_config:
+            return
+        
+        self.logger.debug("Resolved command {} to {}.".format(cmd, id(exec_config)))
+        
+        response, actions = utilities.get_default("response", "actions")(exec_config)
         
         await self.cmd_send_response(message, response)
         await self.cmd_execute_actions(message, actions)
