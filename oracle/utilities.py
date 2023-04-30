@@ -19,3 +19,21 @@ def rgetattr (obj, attr, *args):
     def _getattr(obj, attr):
         return getattr(obj, attr, *args)
     return functools.reduce(_getattr, [obj] + attr.split('.'))
+
+
+def get_default (*items):
+    """
+    Implements itemgetter with None fallback.
+    """
+    
+    if len(items) == 1:
+        item = items.get(item, None)
+        
+        def g(obj):
+            return obj.get(item, None)
+    else:
+        
+        def g(obj):
+            return tuple(obj.get(item, None) for item in items)
+        
+    return g
