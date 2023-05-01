@@ -66,7 +66,7 @@ class Client(discord.Client):
         The default response when a non-administrator uses an admin command.
         """
     
-        await msg.channel.send(embed = {'description': ":x: You do not have the necessary permissions."})
+        await msg.channel.send(embed = discord.Embed.from_dict({'description': ":x: You do not have the necessary permissions."}))
         return False
 
     async def action__no_such_action(self, function_name, msg, args):
