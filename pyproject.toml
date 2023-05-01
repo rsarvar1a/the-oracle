@@ -1,21 +1,27 @@
 [tool.poetry]
-name            = "oracle"
-version         = "0.1.0"
-description     = "A project to create and manage escape rooms."
-authors         = ["Rohan Sarvaria <rsarvaria@uwaterloo.ca>"]
-readme          = "README.md"
-packages        = [{include = "oracle"}]
+name             = "oracle"
+version          = "0.1.0"
+description      = "A project to create and manage escape rooms."
+authors          = ["Rohan Sarvaria <rsarvaria@uwaterloo.ca>"]
+readme           = "README.md"
+packages         = [{include = "oracle"}]
 
 [tool.poetry.dependencies]
-python          = "^3.10"
-"discord.py"    = "^2.2.2"
+python           = "^3.10"
+"discord.py"     = "^2.2.2"
 
 [tool.poetry.dev-dependencies]
-pytest          = "^3.0"
+pytest           = "^3.0"
+black            = "^23.3.0"
+Flake8-pyproject = "^1.2.3"
+flake8           = '^6.0.0'
 
 [tool.poetry.scripts]
-oracle          = "oracle.__main__:main"
+oracle           = "oracle.__main__:main"
+
+[tool.flake8]
+max-line-length  = 120
 
 [build-system]
-requires        = ["poetry-core"]
-build-backend   = "poetry.core.masonry.api"
+requires         = ["poetry-core"]
+build-backend    = "poetry.core.masonry.api"
