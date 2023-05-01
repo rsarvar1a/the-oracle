@@ -61,13 +61,21 @@ class Client(discord.Client):
         self.camel_case_pattern = re.compile(r"(?<!^)(?=[A-Z])")
         self.create_command_library()
 
+    async def action__no_permission(self, function_name, msg, args):
+        """
+        The default response when a non-administrator uses an admin command.
+        """
+    
+        await msg.channel.send(embed = {'description': ":x: You do not have the necessary permissions."})
+        return False
+
     async def action__no_such_action(self, function_name, msg, args):
         """
         The null action.
         """
 
         self.logger.error("No such action `{k}`!".format(k=function_name))
-        return
+        return False
 
     async def action_create_channel_in_category(self, function_name, msg, args):
         """
@@ -121,15 +129,34 @@ class Client(discord.Client):
                 )
                 await channel.move(after=sorted_channels[index - 1], category=parent)
 
-        return
+        return True
+
+    async def action_shutdown(self, function_name, msg, args):
+        """
+        Administrator-gated permission to hard shutdown this instance.
+        """
+
+        if msg.author.id not in self.administrators:
+            await self.action__no_permission(function_name, msg, args)
+            self.logger.warn("User <@{}> tried to shutdown.".format(msg.author.id))
+            return 
+
+        await self.close()
+        return True
 
     async def action_reload(self, function_name, msg, args):
         """
         Administrator-gated permission to hard reload the command library for rapid testing.
         """
 
+        if msg.author.id not in self.administrators:
+            await self.action__no_permission(function_name, msg, args)
+            self.logger.warn("User <@{}> tried to reload.".format(msg.author.id))
+            return
+
         self.logger.warn("Reloading the command library while live!")
         self.create_command_library()
+        return True
 
     async def cmd_execute_actions(self, msg, actions):
         """
@@ -139,14 +166,19 @@ class Client(discord.Client):
         # Action lists are optional if the command doesn't have to do anything except
         # sending a response.
         if not actions:
-            return
+            return True
+
+        statuses = []
 
         for action in actions:
             action_key, args = utilities.get_default("name", "args")(action)
             function_name = await self.cmd_translate_action_key(action_key)
-            await getattr(self, function_name, "action__no_such_action")(
+            status = await getattr(self, function_name, "action__no_such_action")(
                 action_key, msg, args
             )
+            statuses.append(status)
+
+        return all(s for s in statuses)
 
     async def cmd_find_correct(self, msg, cmd, candidates):
         """
@@ -347,6 +379,7 @@ class Client(discord.Client):
     def configure_options(
         self,
         *,
+        administrators=[],
         asset_path="./assets/",
         command_path="./commands/",
         prefix="?",
@@ -356,6 +389,7 @@ class Client(discord.Client):
         Configures the bot given a set of options.
         """
 
+        self.administrators = administrators
         self.asset_path = asset_path
         self.command_path = command_path
         self.prefix = prefix
@@ -457,8 +491,8 @@ class Client(discord.Client):
 
         response, actions = utilities.get_default("response", "actions")(exec_config)
 
-        await self.cmd_send_response(message, response)
-        await self.cmd_execute_actions(message, actions)
+        if await self.cmd_execute_actions(message, actions):
+            await self.cmd_send_response(message, response)
 
         f = time.perf_counter()
 
