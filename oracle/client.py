@@ -169,7 +169,7 @@ class Client (discord.Client):
                 return name == actual_scope
             case "expr" | "like" | "regex":
                 try:
-                    return re.match(name, actual_scope) is not None
+                    return re.search(name, actual_scope) is not None
                 except Exception:
                     self.logger.error("Invalid regex {}.".format(name))
                     return False
@@ -190,7 +190,7 @@ class Client (discord.Client):
                 return any(r.name == name for r in context.author.roles)
             case "expr" | "like" | "regex":
                 try:
-                    return any(re.match(name, r.name) is not None for r in context.author.roles)
+                    return any(re.search(name, r.name) is not None for r in context.author.roles)
                 except Exception:
                     self.logger.error("Invalid regex {}.".format(name))
                     return False
