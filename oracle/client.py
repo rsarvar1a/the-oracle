@@ -358,6 +358,10 @@ class Client(discord.Client):
 
         embeds = []
         for content in contents:
+            if "description" in content:
+                content["description"] = re.sub(
+                    "\\$\\{PREFIX\\}", self.prefix, content['description']
+                )
             embed = discord.Embed.from_dict(content)
             if "image" in content:
                 embed.set_image(url=content["image"])
