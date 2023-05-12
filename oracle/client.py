@@ -459,7 +459,9 @@ class Client(discord.Client):
                     )
                 )
             self.logger.info(
-                "Loaded commands successfully! (took {0:2f}s)".format(f - s)
+                "Loaded {} commands successfully! (took {0:2f}s)".format(
+                    len(self.command_lists), f - s
+                )
             )
 
     async def on_message(self, message):
