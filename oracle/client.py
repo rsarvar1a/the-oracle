@@ -430,7 +430,7 @@ class Client(discord.Client):
                             if not any(
                                 existing_command.get("resolve", None)
                                 == config.get("resolve", None)
-                                for existing_command in self.command_lists["alias"]
+                                for existing_command in self.command_lists[alias]
                             ):
                                 self.command_lists[alias].append(config)
                                 self.logger.debug(
