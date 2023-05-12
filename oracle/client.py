@@ -459,8 +459,8 @@ class Client(discord.Client):
                     )
                 )
             self.logger.info(
-                "Loaded {} commands successfully! (took {0:2f}s)".format(
-                    len(self.command_lists), f - s
+                "Loaded {n} commands successfully! (took {t:0.2f}s)".format(
+                    n=len(self.command_lists), t=f-s
                 )
             )
 
