@@ -15,6 +15,7 @@ pytest           = "^3.0"
 black            = "^23.3.0"
 Flake8-pyproject = "^1.2.3"
 flake8           = '^6.0.0'
+supervisor       = "^4.2.5"
 
 [tool.poetry.scripts]
 oracle           = "oracle.__main__:main"
