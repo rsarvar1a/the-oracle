@@ -143,7 +143,7 @@ class Client(discord.Client):
     
         for k in self.command_lists:
             if k != "reload":
-                self.command_lists.remove(k)
+                self.command_lists.pop(k)
 
         self.logger.warn("Lockdown; reload to unpause.")
         return True
