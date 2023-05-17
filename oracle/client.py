@@ -141,9 +141,8 @@ class Client(discord.Client):
             self.logger.warn("User <@{}> tried to lockdown.".format(msg.author.id))
             return
     
-        for k in self.command_lists:
-            if k != "reload":
-                self.command_lists.pop(k)
+        reloader = self.command_lists['reload']
+        self.command_lists = {"reload": reloader}
 
         self.logger.warn("Lockdown; reload to unpause.")
         return True
