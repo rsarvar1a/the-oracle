@@ -131,6 +131,23 @@ class Client(discord.Client):
 
         return True
 
+    async def action_lockdown(self, function_name, msg, args):
+        """
+        Pauses all command execution. To recover, run a reload.
+        """
+
+        if msg.author.id not in self.administrators:
+            await self.action__no_permission(function_name, msg, args)
+            self.logger.warn("User <@{}> tried to lockdown.".format(msg.author.id))
+            return
+    
+        for k in self.command_lists:
+            if k != "reload":
+                self.command_lists.remove(k)
+
+        self.logger.warn("Lockdown; reload to unpause.")
+        return True
+
     async def action_shutdown(self, function_name, msg, args):
         """
         Administrator-gated permission to hard shutdown this instance.
