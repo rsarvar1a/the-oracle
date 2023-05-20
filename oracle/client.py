@@ -139,12 +139,12 @@ class Client(discord.Client):
         
         declutter = cmdargs[0]
         if declutter in ['true', 'yes', 'y', 'on']:
+            mode = "off"
             if msg.channel.id not in self.preserve:
-                mode = "off"
                 self.preserve.add(msg.channel.id)
         else:
+            mode = "on"
             if msg.channel.id in self.preserve:
-                mode = "on"
                 self.preserve.pop(msg.channel.id)
         
         await msg.channel.send(embed=discord.Embed.from_dict(
