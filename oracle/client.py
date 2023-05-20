@@ -138,7 +138,7 @@ class Client(discord.Client):
         """
         
         declutter = cmdargs[0]
-        if declutter:
+        if declutter in ['true', 'yes', 'y', 'on']:
             if msg.channel.id not in self.preserve:
                 mode = "off"
                 self.preserve.add(msg.channel.id)
