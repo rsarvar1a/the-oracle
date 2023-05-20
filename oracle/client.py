@@ -59,9 +59,10 @@ class Client(discord.Client):
         self.configure_options(**self_opts)
 
         self.camel_case_pattern = re.compile(r"(?<!^)(?=[A-Z])")
+        self.load_state()
         self.create_command_library()
 
-    async def action__no_permission(self, function_name, msg, args):
+    async def action__no_permission(self, function_name, msg, args, cmdargs):
         """
         The default response when a non-administrator uses an admin command.
         """
@@ -69,7 +70,7 @@ class Client(discord.Client):
         await msg.channel.send(embed = discord.Embed.from_dict({'description': ":x: You do not have the necessary permissions."}))
         return False
 
-    async def action__no_such_action(self, function_name, msg, args):
+    async def action__no_such_action(self, function_name, msg, args, cmdargs):
         """
         The null action.
         """
@@ -77,7 +78,7 @@ class Client(discord.Client):
         self.logger.error("No such action `{k}`!".format(k=function_name))
         return False
 
-    async def action_create_channel_in_category(self, function_name, msg, args):
+    async def action_create_channel_in_category(self, function_name, msg, args, cmdargs):
         """
         Creates a channel in the same category as the message.
         args:
@@ -131,7 +132,28 @@ class Client(discord.Client):
 
         return True
 
-    async def action_lockdown(self, function_name, msg, args):
+    async def action_declutter(self, function_name, msg, args, cmdargs):
+        """
+        Determines whether or not to delete command invocations in your channel.
+        """
+        
+        declutter = cmdargs[0]
+        if declutter:
+            if msg.channel.id not in self.preserve:
+                mode = "off"
+                self.preserve.add(msg.channel.id)
+        else:
+            if msg.channel.id in self.preserve:
+                mode = "on"
+                self.preserve.pop(msg.channel.id)
+        
+        await msg.channel.send(embed=discord.Embed.from_dict(
+            {"description": ":white_check_mark: Turned {} command deletion.".format(mode)}
+        ))
+        
+        return True
+
+    async def action_lockdown(self, function_name, msg, args, cmdargs):
         """
         Pauses all command execution. To recover, run a reload.
         """
@@ -147,7 +169,7 @@ class Client(discord.Client):
         self.logger.warn("Lockdown; reload to unpause.")
         return True
 
-    async def action_shutdown(self, function_name, msg, args):
+    async def action_shutdown(self, function_name, msg, args, cmdargs):
         """
         Administrator-gated permission to hard shutdown this instance.
         """
@@ -160,7 +182,7 @@ class Client(discord.Client):
         await self.close()
         return True
 
-    async def action_reload(self, function_name, msg, args):
+    async def action_reload(self, function_name, msg, args, cmdargs):
         """
         Administrator-gated permission to hard reload the command library for rapid testing.
         """
@@ -174,7 +196,7 @@ class Client(discord.Client):
         self.create_command_library()
         return True
 
-    async def cmd_execute_actions(self, msg, actions):
+    async def cmd_execute_actions(self, msg, actions, cmdargs):
         """
         Executes a list of builtin command actions, in the order given.
         """
@@ -190,7 +212,7 @@ class Client(discord.Client):
             action_key, args = utilities.get_default("name", "args")(action)
             function_name = await self.cmd_translate_action_key(action_key)
             status = await getattr(self, function_name, "action__no_such_action")(
-                action_key, msg, args
+                action_key, msg, args, cmdargs
             )
             statuses.append(status)
 
@@ -403,6 +425,7 @@ class Client(discord.Client):
         asset_path="./assets/",
         command_path="./commands/",
         prefix="?",
+        state_path="./configs/",
         token=None,
     ):
         """
@@ -413,6 +436,7 @@ class Client(discord.Client):
         self.asset_path = asset_path
         self.command_path = command_path
         self.prefix = prefix
+        self.state_path = state_path
         self.token = token
 
     def create_command_library(self):
@@ -480,6 +504,12 @@ class Client(discord.Client):
                 )
             )
 
+    def load_state(self):
+        """
+        Loads state from the configs directory.
+        """
+        self.preserve = set()
+
     async def on_message(self, message):
         """
         Handles messages by looking them up in the command dictionary.
@@ -513,7 +543,7 @@ class Client(discord.Client):
 
         response, actions = utilities.get_default("response", "actions")(exec_config)
 
-        if await self.cmd_execute_actions(message, actions):
+        if await self.cmd_execute_actions(message, actions, args):
             await self.cmd_send_response(message, response)
 
         f = time.perf_counter()
@@ -531,7 +561,8 @@ class Client(discord.Client):
         # Delete successful commands only.
         # If a command failed due to context checks, do not even acknowledge it.
         # This protects the identity of secret commands.
-        await message.delete()
+        if message.channel.id not in self.preserve:
+            await message.delete()
 
     def run(self):
         """
