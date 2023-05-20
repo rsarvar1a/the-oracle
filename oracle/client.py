@@ -139,13 +139,13 @@ class Client(discord.Client):
         
         declutter = cmdargs[0]
         if declutter in ['true', 'yes', 'y', 'on']:
-            mode = "off"
-            if msg.channel.id not in self.preserve:
-                self.preserve.add(msg.channel.id)
-        else:
             mode = "on"
+            if msg.channel.id not in self.preserve:
+                self.delete.add(msg.channel.id)
+        else:
+            mode = "off"
             if msg.channel.id in self.preserve:
-                self.preserve.pop(msg.channel.id)
+                self.delete.pop(msg.channel.id)
         
         await msg.channel.send(embed=discord.Embed.from_dict(
             {"description": ":white_check_mark: Turned {} command deletion.".format(mode)}
@@ -561,7 +561,7 @@ class Client(discord.Client):
         # Delete successful commands only.
         # If a command failed due to context checks, do not even acknowledge it.
         # This protects the identity of secret commands.
-        if message.channel.id not in self.preserve:
+        if message.channel.id in self.delete:
             await message.delete()
 
     def run(self):
