@@ -508,7 +508,7 @@ class Client(discord.Client):
         """
         Loads state from the configs directory.
         """
-        self.preserve = set()
+        self.delete = set()
 
     async def on_message(self, message):
         """
